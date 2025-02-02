@@ -5,6 +5,7 @@
 import bisect
 import random
 import time
+import datetime
 
 import streamlit as st
 
@@ -20,11 +21,9 @@ if "parking_slots" not in st.session_state:
 
     st.session_state["vehicle_id"] = set()
 
-
 if "bookings" not in st.session_state:
     st.session_state["bookings"] = {}
 
-# This dictionary will store one placeholder per slot
 if "slot_placeholders" not in st.session_state:
     st.session_state["slot_placeholders"] = {}
 
@@ -70,20 +69,17 @@ def render_slot(slot_id):
 def render_all_slots():
     """Function to render all slots"""
     cols = st.columns(10)
-    # For each row (i) and column (j)
     for i in range(10):
         for j in range(10):
             slot_id = f"{chr(65 + i)}{j+1}"
 
-            # If this placeholder does not exist yet, create it
             if slot_id not in st.session_state["slot_placeholders"]:
                 st.session_state["slot_placeholders"][slot_id] = cols[j].empty()
 
-            # Render the slot status into the placeholder
             render_slot(slot_id)
 
 
-def allocate_slot(car_number, car_type, duration):
+def allocate_slot(car_number, car_type, date, duration):
     """Function to allocate a slot"""
     if car_number in st.session_state["vehicle_id"]:
         return -1
@@ -100,6 +96,7 @@ def allocate_slot(car_number, car_type, duration):
         st.session_state["bookings"][car_number] = {
             "slot": allocated_slot,
             "Vehicle_type": car_type,
+            "date": date,  # Store booking date
             "start_time": start,
             "end_time": end,
         }
@@ -116,7 +113,6 @@ def deallocate_slot(car_number):
         allocated_slot = st.session_state["bookings"][car_number]["slot"]
         st.session_state["parking_slots"][allocated_slot] = "available"
         del st.session_state["bookings"][car_number]
-        # Re-render just this slot
         render_slot(allocated_slot)
         return allocated_slot
 
@@ -124,14 +120,10 @@ def deallocate_slot(car_number):
 
 
 def check_expired_bookings():
-    """
-    If a booking has exceeded its duration, deallocate that slot.
-    """
-
+    """If a booking has exceeded its duration, deallocate that slot."""
     current_time = time.time()
     expired_cars = []
     for car_number, booking in st.session_state["bookings"].items():
-        # Convert duration (hours) to seconds for comparison
         if current_time >= booking["end_time"]:
             expired_cars.append(car_number)
     for car_number in expired_cars:
@@ -142,7 +134,6 @@ def main():
     """Main function for the Smart Parking System app."""
     st.title("Smart Parking System")
 
-    # Navigation
     with st.expander("Navigation", expanded=True):
         choice = st.radio(
             "Choose an action",
@@ -152,14 +143,10 @@ def main():
 
     st.markdown(f"### Current Selection: {choice}")
 
-    # Check for expired bookings before rendering slots
     check_expired_bookings()
-
-    # Render the 10x10 grid of slots
     st.subheader("Parking Slots Layout")
     render_all_slots()
 
-    # Display the appropriate section based on the user’s selection
     if choice == "Check In":
         handle_check_in()
     elif choice == "Pre Booking":
@@ -180,11 +167,11 @@ def handle_check_in():
             st.warning("Please enter a valid car number.")
             return
 
-        allocated_slot = allocate_slot(car_number, car_type, duration)
+        allocated_slot = allocate_slot(car_number, car_type, date, duration)
         if allocated_slot == -1:
             st.error("Vehicle already allocated")
         elif allocated_slot:
-            st.success(f"Slot {allocated_slot} allocated for {car_number}.")
+            st.success(f"Slot {allocated_slot} allocated for {car_number} on {date}.")
         else:
             st.error("No available slots.")
 
@@ -194,7 +181,12 @@ def handle_pre_booking():
     st.subheader("Pre Booking")
     car_number = st.text_input("Vehicle Number")
     car_type = st.selectbox("Vehicle Type", ["2 wheeler", "4 wheeler", "EV-4 wheeler"])
+    
+    # Select In Date and Out Date
+    in_date = st.date_input("Select In Date", datetime.date.today()).strftime("%d-%m-%y")
     in_time = st.number_input("In Time (HH)", min_value=0, max_value=23, value=10)
+    
+    out_date = st.date_input("Select Out Date", datetime.date.today()).strftime("%d-%m-%y")
     out_time = st.number_input("Out Time (HH)", min_value=0, max_value=23, value=16)
 
     if st.button("Pre Book"):
@@ -202,13 +194,15 @@ def handle_pre_booking():
             st.warning("Please enter a valid car number.")
             return
 
-        duration = out_time - in_time
+        duration = (datetime.datetime.strptime(out_date, "%d-%m-%y") - 
+                    datetime.datetime.strptime(in_date, "%d-%m-%y")).days * 24 + (out_time - in_time)
+
         if duration > 0:
-            allocated_slot = allocate_slot(car_number, car_type, duration)
+            allocated_slot = allocate_slot(car_number, car_type, in_date, duration)
             if allocated_slot:
                 st.success(
                     f"Slot {allocated_slot} pre-booked for {car_number} "
-                    f"from {in_time}:00 to {out_time}:00."
+                    f"from {in_date} {in_time}:00 to {out_date} {out_time}:00."
                 )
             else:
                 st.error("No available slots.")

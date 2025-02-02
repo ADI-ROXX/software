@@ -24,6 +24,7 @@ if "slot_placeholders" not in st.session_state:
     st.session_state["slot_placeholders"] = {}
 
 
+
 def is_overlapping(new_booking, bookings):
     new_start, new_end = new_booking
     start_times = [slot[0] for slot in bookings]

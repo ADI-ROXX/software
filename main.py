@@ -3,36 +3,34 @@
 """
 
 import bisect
+import datetime
 import random
 import time
 
 import streamlit as st
 
 if "parking_slots" not in st.session_state:
-    # 10 x 10 grid of slots: A1 through J10
     st.session_state["parking_slots"] = {
         f"{chr(65 + i)}{j+1}": "available" for i in range(10) for j in range(10)
     }
-
+if "time_slots" not in st.session_state:
     st.session_state["time_slots"] = {
         f"{chr(65 + i)}{j+1}": [] for i in range(10) for j in range(10)
     }
-
+if "vehicle_id" not in st.session_state:
     st.session_state["vehicle_id"] = set()
-
-
 if "bookings" not in st.session_state:
     st.session_state["bookings"] = {}
-
-# This dictionary will store one placeholder per slot
 if "slot_placeholders" not in st.session_state:
     st.session_state["slot_placeholders"] = {}
+if "threshold" not in st.session_state:
+    st.session_state["threshold"] = 1799
 
 
 def is_overlapping(new_booking, bookings):
     """Function to check if the current time clashes with any booking"""
     new_start, new_end = new_booking
-    start_times = [slot[0] for slot in bookings]
+    start_times = [slot[1] for slot in bookings]
 
     idx = bisect.bisect_left(start_times, new_start)
 
@@ -40,18 +38,18 @@ def is_overlapping(new_booking, bookings):
     prev_gap, next_gap = None, None
 
     if idx > 0:
-        _, prev_end = bookings[idx - 1]
+        _, _, prev_end = bookings[idx - 1]
         if new_start < prev_end:
             overlap = True
         else:
-            prev_gap = (new_start - prev_end) / 3600
+            prev_gap = new_start - prev_end
 
     if idx < len(bookings):
-        next_start, _ = bookings[idx]
+        _, next_start, _ = bookings[idx]
         if new_end > next_start:
             overlap = True
         else:
-            next_gap = (next_start - new_end) / 3600
+            next_gap = next_start - new_end
 
     return overlap, prev_gap, next_gap
 
@@ -83,10 +81,8 @@ def render_all_slots():
             render_slot(slot_id)
 
 
-def allocate_slot(car_number, car_type, duration):
+def allocate_slot(car_number, start, end, booking_type):
     """Function to allocate a slot"""
-    if car_number in st.session_state["vehicle_id"]:
-        return -1
     available_slots = [
         slot
         for slot, status in st.session_state["parking_slots"].items()
@@ -95,19 +91,94 @@ def allocate_slot(car_number, car_type, duration):
     if available_slots:
         allocated_slot = random.choice(available_slots)
         st.session_state["parking_slots"][allocated_slot] = "booked"
-        start = time.time()
-        end = time.time() + int(duration) * 3600
         st.session_state["bookings"][car_number] = {
             "slot": allocated_slot,
-            "Vehicle_type": car_type,
             "start_time": start,
             "end_time": end,
+            "Booking_type": booking_type,
         }
         st.session_state["time_slots"][allocated_slot].append([car_number, start, end])
+        st.session_state["time_slots"][allocated_slot].sort(key=lambda slot: slot[1])
+
         render_slot(allocated_slot)
         st.session_state["vehicle_id"].add(car_number)
         return allocated_slot
     return None
+
+
+def hhmm_to_datetime(date_str, time_str):
+    """Function that takes the hhmm input and returns the datetime object"""
+    if len(time_str) != 4 or not time_str.isdigit():
+        raise ValueError("Time string must be exactly 4 digits in HHMM format.")
+
+    hour = int(time_str[:2])
+    minute = int(time_str[2:])
+
+    if not 0 <= hour <= 23:
+        raise ValueError("Hour must be between 00 and 23.")
+    if not 0 <= minute <= 59:
+        raise ValueError("Minute must be between 00 and 59.")
+
+    try:
+        date_obj = datetime.datetime.strptime(date_str, "%d-%m-%y").date()
+    except ValueError as e:
+        raise ValueError("Date string must be in 'dd-mm-yy' format.") from e
+
+    return datetime.datetime(
+        year=date_obj.year,
+        month=date_obj.month,
+        day=date_obj.day,
+        hour=hour,
+        minute=minute,
+    ).timestamp()
+
+
+def smart_allocate_slot(car_number, start, end, booking_type):
+    """Function to allocate a slot"""
+    if car_number in st.session_state["vehicle_id"]:
+        car_info = st.session_state["bookings"][car_number]
+        if car_info["Booking_type"] == "booking":
+            curr = time.time()
+            if car_info["start_time"] <= curr < car_info["end_time"]:
+                return -2, st.session_state["bookings"][car_number]["slot"]
+        return -1, None
+
+    ts = st.session_state["time_slots"]
+
+    ind = -1
+    mini = time.time()
+    thresh = st.session_state["threshold"]
+    for i in st.session_state["time_slots"].keys():
+        if len(ts[i]) == 0:
+            continue
+        overlap, prev_gap, next_gap = is_overlapping(
+            (start, end), st.session_state["time_slots"][i]
+        )
+        if not overlap:
+            if not prev_gap:
+                curr_min = next_gap
+            elif not next_gap:
+                curr_min = prev_gap
+            else:
+                curr_min = min(prev_gap, next_gap)
+
+            if curr_min < mini:
+                if curr_min >= thresh:
+                    ind = i
+    if ind == -1:
+        return allocate_slot(car_number, start, end, booking_type), None
+
+    st.session_state["bookings"][car_number] = {
+        "slot": ind,
+        "start_time": start,
+        "end_time": end,
+        "Booking_type": booking_type,
+    }
+    st.session_state["time_slots"][ind].append([car_number, start, end])
+    st.session_state["time_slots"][ind].sort(key=lambda slot: slot[1])
+    render_slot(ind)
+    st.session_state["vehicle_id"].add(car_number)
+    return ind, None
 
 
 def deallocate_slot(car_number):
@@ -117,7 +188,19 @@ def deallocate_slot(car_number):
         st.session_state["parking_slots"][allocated_slot] = "available"
         del st.session_state["bookings"][car_number]
         # Re-render just this slot
+        ts = st.session_state["time_slots"]
+
+        for key in st.session_state["time_slots"].keys():
+            for i, slot in enumerate(ts[key]):
+                if slot[0] == car_number:
+                    del st.session_state["time_slots"][key][i]
+                    break
+
+        # for i, slot in enumerate(st.session_state["time_slots"]):
+        #     if slot[0]==car_number:
+        #         del st.session_state["time_slots"][i]
         render_slot(allocated_slot)
+        st.session_state["vehicle_id"].remove(car_number)
         return allocated_slot
 
     return None
@@ -127,11 +210,9 @@ def check_expired_bookings():
     """
     If a booking has exceeded its duration, deallocate that slot.
     """
-
     current_time = time.time()
     expired_cars = []
     for car_number, booking in st.session_state["bookings"].items():
-        # Convert duration (hours) to seconds for comparison
         if current_time >= booking["end_time"]:
             expired_cars.append(car_number)
     for car_number in expired_cars:
@@ -172,16 +253,19 @@ def handle_check_in():
     """Handle the 'Check In' action."""
     st.subheader("Check In")
     car_number = st.text_input("Vehicle Number")
-    car_type = st.selectbox("Vehicle Type", ["2 wheeler", "4 wheeler", "EV-4 wheeler"])
     duration = st.number_input("Number of Hours", min_value=1, max_value=24, value=6)
-
+    curr = time.time()
     if st.button("Check In"):
         if not car_number.strip():
             st.warning("Please enter a valid car number.")
             return
 
-        allocated_slot = allocate_slot(car_number, car_type, duration)
-        if allocated_slot == -1:
+        allocated_slot, a = smart_allocate_slot(
+            car_number, curr, curr + duration * 3600, "checkin"
+        )
+        if allocated_slot == -2:
+            st.success(f"Your slot is {a}")
+        elif allocated_slot == -1:
             st.error("Vehicle already allocated")
         elif allocated_slot:
             st.success(f"Slot {allocated_slot} allocated for {car_number}.")
@@ -193,22 +277,32 @@ def handle_pre_booking():
     """Handle the 'Pre Booking' action."""
     st.subheader("Pre Booking")
     car_number = st.text_input("Vehicle Number")
-    car_type = st.selectbox("Vehicle Type", ["2 wheeler", "4 wheeler", "EV-4 wheeler"])
-    in_time = st.number_input("In Time (HH)", min_value=0, max_value=23, value=10)
-    out_time = st.number_input("Out Time (HH)", min_value=0, max_value=23, value=16)
+    in_date = st.date_input("Select In Date", datetime.date.today()).strftime(
+        "%d-%m-%y"
+    )
+    in_time = st.text_input("In Time (HHMM)")
+
+    out_date = st.date_input("Select Out Date", datetime.date.today()).strftime(
+        "%d-%m-%y"
+    )
+    out_time = st.text_input("Out Time (HHMM)")
 
     if st.button("Pre Book"):
         if not car_number.strip():
             st.warning("Please enter a valid car number.")
             return
 
-        duration = out_time - in_time
-        if duration > 0:
-            allocated_slot = allocate_slot(car_number, car_type, duration)
-            if allocated_slot:
+        start = hhmm_to_datetime(in_date, in_time)
+        end = hhmm_to_datetime(out_date, out_time)
+
+        if start < end:
+            allocated_slot = smart_allocate_slot(car_number, start, end, "booking")
+            if allocated_slot == -1:
+                st.error("Already allocated a slot for the vehicle")
+            elif allocated_slot:
                 st.success(
                     f"Slot {allocated_slot} pre-booked for {car_number} "
-                    f"from {in_time}:00 to {out_time}:00."
+                    f"from {in_time} to {out_time}."
                 )
             else:
                 st.error("No available slots.")
@@ -225,7 +319,6 @@ def handle_check_out():
         if not car_number.strip():
             st.warning("Please enter a valid car number.")
             return
-
         deallocated_slot = deallocate_slot(car_number)
         if deallocated_slot:
             st.success(f"Slot {deallocated_slot} deallocated for {car_number}.")

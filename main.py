@@ -1,3 +1,7 @@
+"""
+    This module contains the code for smart parking system
+"""
+
 import random
 import time
 
@@ -25,6 +29,7 @@ if "slot_placeholders" not in st.session_state:
 
 
 def render_slot(slot_id):
+    """Function to render a slot"""
     slot_status = st.session_state["parking_slots"][slot_id]
     color = "lightblue" if slot_status == "available" else "darkgrey"
     st.session_state["slot_placeholders"][slot_id].markdown(
@@ -35,6 +40,7 @@ def render_slot(slot_id):
 
 
 def render_all_slots():
+    """Function to render all slots"""
     cols = st.columns(10)
     # For each row (i) and column (j)
     for i in range(10):
@@ -50,6 +56,7 @@ def render_all_slots():
 
 
 def allocate_slot(car_number, car_type, duration):
+    """Function to allocate a slot"""
     if car_number in st.session_state["vehicle_id"]:
         return -1
     available_slots = [
@@ -76,6 +83,7 @@ def allocate_slot(car_number, car_type, duration):
 
 
 def deallocate_slot(car_number):
+    """Function for deallocating a slot"""
     if car_number in st.session_state["bookings"]:
         allocated_slot = st.session_state["bookings"][car_number]["slot"]
         st.session_state["parking_slots"][allocated_slot] = "available"
@@ -96,13 +104,14 @@ def check_expired_bookings():
     expired_cars = []
     for car_number, booking in st.session_state["bookings"].items():
         # Convert duration (hours) to seconds for comparison
-        if current_time - booking["start_time"] >= booking["duration"] * 3600:
+        if current_time >= booking["end_time"]:
             expired_cars.append(car_number)
     for car_number in expired_cars:
         deallocate_slot(car_number)
 
 
 def main():
+    """Main function for the Smart Parking System app."""
     st.title("Smart Parking System")
 
     # Navigation
@@ -122,65 +131,78 @@ def main():
     st.subheader("Parking Slots Layout")
     render_all_slots()
 
-    # Actions depending on user choice
+    # Display the appropriate section based on the user’s selection
     if choice == "Check In":
-        st.subheader("Check In")
-        car_number = st.text_input("Vehicle Number")
-        car_type = st.selectbox(
-            "Vehicle Type", ["2 wheeler", "4 wheeler", "EV-4 wheeler"]
-        )
-        duration = st.number_input(
-            "Number of Hours", min_value=1, max_value=24, value=6
-        )
-        if st.button("Check In"):
-            if not car_number.strip():
-                st.warning("Please enter a valid car number.")
-            else:
-                allocated_slot = allocate_slot(car_number, car_type, duration)
-                if allocated_slot == -1:
-                    st.error("Vehicle already allocated")
-                elif allocated_slot:
-                    st.success(f"Slot {allocated_slot} allocated for {car_number}.")
-                else:
-                    st.error("No available slots.")
-
+        handle_check_in()
     elif choice == "Pre Booking":
-        st.subheader("Pre Booking")
-        car_number = st.text_input("Vehicle Number")
-        car_type = st.selectbox(
-            "Vehicle Type", ["2 wheeler", "4 wheeler", "EV-4 wheeler"]
-        )
-        in_time = st.number_input("In Time (HH)", min_value=0, max_value=23, value=10)
-        out_time = st.number_input("Out Time (HH)", min_value=0, max_value=23, value=16)
-        if st.button("Pre Book"):
-            if not car_number.strip():
-                st.warning("Please enter a valid car number.")
-            else:
-                duration = out_time - in_time
-                if duration > 0:
-                    allocated_slot = allocate_slot(car_number, car_type, duration)
-                    if allocated_slot:
-                        st.success(
-                            f"Slot {allocated_slot} pre-booked for {car_number} "
-                            f"from {in_time}:00 to {out_time}:00."
-                        )
-                    else:
-                        st.error("No available slots.")
-                else:
-                    st.error("Out time must be greater than in time.")
-
+        handle_pre_booking()
     elif choice == "Check Out":
-        st.subheader("Check Out")
-        car_number = st.text_input("Vehicle Number")
-        if st.button("Check Out"):
-            if not car_number.strip():
-                st.warning("Please enter a valid car number.")
+        handle_check_out()
+
+
+def handle_check_in():
+    """Handle the 'Check In' action."""
+    st.subheader("Check In")
+    car_number = st.text_input("Vehicle Number")
+    car_type = st.selectbox("Vehicle Type", ["2 wheeler", "4 wheeler", "EV-4 wheeler"])
+    duration = st.number_input("Number of Hours", min_value=1, max_value=24, value=6)
+
+    if st.button("Check In"):
+        if not car_number.strip():
+            st.warning("Please enter a valid car number.")
+            return
+
+        allocated_slot = allocate_slot(car_number, car_type, duration)
+        if allocated_slot == -1:
+            st.error("Vehicle already allocated")
+        elif allocated_slot:
+            st.success(f"Slot {allocated_slot} allocated for {car_number}.")
+        else:
+            st.error("No available slots.")
+
+
+def handle_pre_booking():
+    """Handle the 'Pre Booking' action."""
+    st.subheader("Pre Booking")
+    car_number = st.text_input("Vehicle Number")
+    car_type = st.selectbox("Vehicle Type", ["2 wheeler", "4 wheeler", "EV-4 wheeler"])
+    in_time = st.number_input("In Time (HH)", min_value=0, max_value=23, value=10)
+    out_time = st.number_input("Out Time (HH)", min_value=0, max_value=23, value=16)
+
+    if st.button("Pre Book"):
+        if not car_number.strip():
+            st.warning("Please enter a valid car number.")
+            return
+
+        duration = out_time - in_time
+        if duration > 0:
+            allocated_slot = allocate_slot(car_number, car_type, duration)
+            if allocated_slot:
+                st.success(
+                    f"Slot {allocated_slot} pre-booked for {car_number} "
+                    f"from {in_time}:00 to {out_time}:00."
+                )
             else:
-                deallocated_slot = deallocate_slot(car_number)
-                if deallocated_slot:
-                    st.success(f"Slot {deallocated_slot} deallocated for {car_number}.")
-                else:
-                    st.error("Vehicle number not found in bookings.")
+                st.error("No available slots.")
+        else:
+            st.error("Out time must be greater than in time.")
+
+
+def handle_check_out():
+    """Handle the 'Check Out' action."""
+    st.subheader("Check Out")
+    car_number = st.text_input("Vehicle Number")
+
+    if st.button("Check Out"):
+        if not car_number.strip():
+            st.warning("Please enter a valid car number.")
+            return
+
+        deallocated_slot = deallocate_slot(car_number)
+        if deallocated_slot:
+            st.success(f"Slot {deallocated_slot} deallocated for {car_number}.")
+        else:
+            st.error("Vehicle number not found in bookings.")
 
 
 if __name__ == "__main__":

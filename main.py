@@ -2,6 +2,7 @@
     This module contains the code for smart parking system
 """
 
+import bisect
 import random
 import time
 
@@ -28,30 +29,30 @@ if "slot_placeholders" not in st.session_state:
     st.session_state["slot_placeholders"] = {}
 
 
-
 def is_overlapping(new_booking, bookings):
+    """Function to check if the current time clashes with any booking"""
     new_start, new_end = new_booking
     start_times = [slot[0] for slot in bookings]
-    
+
     idx = bisect.bisect_left(start_times, new_start)
-    
+
     overlap = False
     prev_gap, next_gap = None, None
-    
+
     if idx > 0:
-        prev_start, prev_end = bookings[idx - 1]
+        _, prev_end = bookings[idx - 1]
         if new_start < prev_end:
             overlap = True
         else:
             prev_gap = (new_start - prev_end) / 3600
-    
+
     if idx < len(bookings):
-        next_start, next_end = bookings[idx]
+        next_start, _ = bookings[idx]
         if new_end > next_start:
             overlap = True
         else:
             next_gap = (next_start - new_end) / 3600
-    
+
     return overlap, prev_gap, next_gap
 
 

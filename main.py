@@ -1,6 +1,7 @@
-import streamlit as st
 import random
 import time
+
+import streamlit as st
 
 if "parking_slots" not in st.session_state:
     # 10 x 10 grid of slots: A1 through J10
@@ -71,8 +72,7 @@ def allocate_slot(car_number, car_type, duration):
         render_slot(allocated_slot)
         st.session_state["vehicle_id"].add(car_number)
         return allocated_slot
-    else:
-        return None
+    return None
 
 
 def deallocate_slot(car_number):
@@ -83,8 +83,8 @@ def deallocate_slot(car_number):
         # Re-render just this slot
         render_slot(allocated_slot)
         return allocated_slot
-    else:
-        return None
+
+    return None
 
 
 def check_expired_bookings():

@@ -2,6 +2,7 @@ import streamlit as st
 import random
 import time
 
+#I am comitting
 if "parking_slots" not in st.session_state:
     # 10 x 10 grid of slots: A1 through J10
     st.session_state["parking_slots"] = {

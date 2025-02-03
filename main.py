@@ -136,10 +136,8 @@ def allocate_slot(car_number, start, end, booking_type):
 
 def smart_allocate_slot(car_number, start, end, booking_type):
     """Function to allocate a slot"""
-    if (
-        car_number in st.session_state["vehicle_id"]
-        and car_info["Booking_type"] == "booking"
-    ):
+
+    if car_number in st.session_state["vehicle_id"]:
         car_info = st.session_state["bookings"][car_number]
         if booking_type == "checkin":
             curr = time.time()

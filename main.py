@@ -129,32 +129,32 @@ def allocate_slot(car_number, start, end, booking_type):
 
         render_slot(allocated_slot)
         st.session_state["vehicle_id"].add(car_number)
-        st.success(f'Slot {str(allocated_slot)} pre-booked for {car_number}')
+        st.success(f"Slot {str(allocated_slot)} pre-booked for {car_number}")
         return
     st.error("No slots available")
 
 
 def smart_allocate_slot(car_number, start, end, booking_type):
     """Function to allocate a slot"""
-    if car_number in st.session_state["vehicle_id"]:
+    if (
+        car_number in st.session_state["vehicle_id"]
+        and car_info["Booking_type"] == "booking"
+    ):
         car_info = st.session_state["bookings"][car_number]
-        if car_info["Booking_type"] == "booking":
-            if booking_type == "checkin":
-                curr = time.time()
-                if car_info["start_time"] <= curr < car_info["end_time"]:
-                    st.success(
-                        f'Your slot is {st.session_state["bookings"][car_number]["slot"]}'
-                    )
-                    return
-                else:
-                    st.error(f'Time se aa bsdk')
-                    return
-            elif booking_type == "booking":
-                st.error("Already allocated a slot for the vehicle")
+        if booking_type == "checkin":
+            curr = time.time()
+            if car_info["start_time"] <= curr < car_info["end_time"]:
+                st.success(
+                    f'Your slot is {st.session_state["bookings"][car_number]["slot"]}'
+                )
                 return
-            else:
-                st.error("Invalid booking type")
-                return
+            st.error("Time se aa bsdk")
+            return
+        if booking_type == "booking":
+            st.error("Already allocated a slot for the vehicle")
+            return
+        st.error("Invalid booking type")
+        return
 
     ts = st.session_state["time_slots"]
 
@@ -275,9 +275,7 @@ def handle_check_in():
             st.warning("Please enter a valid car number.")
             return
 
-        smart_allocate_slot(
-            car_number, curr, curr + duration * 3600, "checkin"
-        )
+        smart_allocate_slot(car_number, curr, curr + duration * 3600, "checkin")
 
 
 def handle_pre_booking():

@@ -129,9 +129,9 @@ def allocate_slot(car_number, start, end, booking_type):
 
         render_slot(allocated_slot)
         st.session_state["vehicle_id"].add(car_number)
-        st.success(f"Slot {str(allocated_slot)} pre-booked for {car_number}")
+        st.toast(f"Slot {str(allocated_slot)} pre-booked for {car_number}", icon="✅")
         return
-    st.error("No slots available")
+    st.toast("No slots available", icon="❌")
 
 
 def smart_allocate_slot(car_number, start, end, booking_type):
@@ -142,16 +142,16 @@ def smart_allocate_slot(car_number, start, end, booking_type):
         if booking_type == "checkin":
             curr = time.time()
             if car_info["start_time"] <= curr < car_info["end_time"]:
-                st.success(
+                st.toast(
                     f'Your slot is {st.session_state["bookings"][car_number]["slot"]}'
-                )
+                , icon="✅")
                 return
-            st.error("Time se aa bsdk")
+            st.toast("Time se aa bsdk", icon="❌")
             return
         if booking_type == "booking":
-            st.error("Already allocated a slot for the vehicle")
+            st.toast("Already allocated a slot for the vehicle", icon="❌")
             return
-        st.error("Invalid booking type")
+        st.toast("Invalid booking type", icon="❌")
         return
 
     ts = st.session_state["time_slots"]
@@ -191,7 +191,7 @@ def smart_allocate_slot(car_number, start, end, booking_type):
     render_slot(ind)
     st.session_state["vehicle_id"].add(car_number)
     st.session_state["parking_slots"][ind] = "booked"
-    st.success(f"Slot {ind} pre-booked for {car_number}")
+    st.toast(f"Slot {ind} pre-booked for {car_number}", icon="✅")
 
 
 def deallocate_slot(car_number):
@@ -270,7 +270,7 @@ def handle_check_in():
     curr = time.time()
     if st.button("Check In"):
         if not car_number.strip():
-            st.warning("Please enter a valid car number.")
+            st.toast("Please enter a valid car number.", icon="❌")
             return
 
         smart_allocate_slot(car_number, curr, curr + duration * 3600, "checkin")
@@ -292,7 +292,7 @@ def handle_pre_booking():
 
     if st.button("Pre Book"):
         if not car_number.strip():
-            st.warning("Please enter a valid car number.")
+            st.toast("Please enter a valid car number.", icon="❌")
             return
 
         start = hhmm_to_datetime(in_date, in_time)
@@ -301,7 +301,7 @@ def handle_pre_booking():
         if start < end:
             smart_allocate_slot(car_number, start, end, "booking")
         else:
-            st.error("Out time must be greater than in time.")
+            st.toast("Out time must be greater than in time.", icon="❌")
 
 
 def handle_check_out():
@@ -311,13 +311,13 @@ def handle_check_out():
 
     if st.button("Check Out"):
         if not car_number.strip():
-            st.warning("Please enter a valid car number.")
+            st.toast("Please enter a valid car number.", icon="❌")
             return
         deallocated_slot = deallocate_slot(car_number)
         if deallocated_slot:
-            st.success(f"Slot {deallocated_slot} deallocated for {car_number}.")
+            st.toast(f"Slot {deallocated_slot} deallocated for {car_number}.", icon="✅")
         else:
-            st.error("Vehicle number not found in bookings.")
+            st.toast("Vehicle number not found in bookings.", icon="❌")
 
 
 if __name__ == "__main__":

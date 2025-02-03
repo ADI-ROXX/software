@@ -80,8 +80,13 @@ def is_overlapping(new_booking, bookings):
 
 def render_slot(slot_id):
     """Render a slot with its current status."""
-    slot_status = st.session_state["parking_slots"][slot_id]
-    color = "lightblue" if slot_status == "available" else "darkgrey"
+    slot_booking = st.session_state["time_slots"][slot_id]
+    curr_time = time.time()
+    overlap_bool, diff1, diff2 = is_overlapping((curr_time, curr_time), slot_booking)
+    if (len(slot_booking) == 0): color = "lightblue"
+    elif (overlap_bool): color = "red"
+    else: color = "darkgrey"
+
     st.session_state["slot_placeholders"][slot_id].markdown(
         f"<div style='background-color:{color}; "
         f"padding:10px; text-align:center;'>{slot_id}</div>",

@@ -1,14 +1,11 @@
-"""
-    This module contains the code for smart parking system
-"""
-
 import bisect
 import datetime
 import random
 import time
-
+import threading
 import streamlit as st
 
+# Initialize session state variables
 if "parking_slots" not in st.session_state:
     st.session_state["parking_slots"] = {
         f"{chr(65 + i)}{j+1}": "available" for i in range(10) for j in range(10)
@@ -28,7 +25,7 @@ if "threshold" not in st.session_state:
 
 
 def hhmm_to_datetime(date_str, time_str):
-    """Function that takes the hhmm input and returns the datetime object"""
+    """Convert hhmm input to a datetime object."""
     if len(time_str) != 4 or not time_str.isdigit():
         raise ValueError("Time string must be exactly 4 digits in HHMM format.")
 
@@ -55,7 +52,7 @@ def hhmm_to_datetime(date_str, time_str):
 
 
 def is_overlapping(new_booking, bookings):
-    """Function to check if the current time clashes with any booking"""
+    """Check if the current time clashes with any booking."""
     new_start, new_end = new_booking
     start_times = [slot[1] for slot in bookings]
 
@@ -82,7 +79,7 @@ def is_overlapping(new_booking, bookings):
 
 
 def render_slot(slot_id):
-    """Function to render a slot"""
+    """Render a slot with its current status."""
     slot_status = st.session_state["parking_slots"][slot_id]
     color = "lightblue" if slot_status == "available" else "darkgrey"
     st.session_state["slot_placeholders"][slot_id].markdown(
@@ -93,23 +90,18 @@ def render_slot(slot_id):
 
 
 def render_all_slots():
-    """Function to render all slots"""
+    """Render all slots in a 10x10 grid."""
     cols = st.columns(10)
-    # For each row (i) and column (j)
     for i in range(10):
         for j in range(10):
             slot_id = f"{chr(65 + i)}{j+1}"
-
-            # If this placeholder does not exist yet, create it
             if slot_id not in st.session_state["slot_placeholders"]:
                 st.session_state["slot_placeholders"][slot_id] = cols[j].empty()
-
-            # Render the slot status into the placeholder
             render_slot(slot_id)
 
 
 def allocate_slot(car_number, start, end, booking_type):
-    """Function to allocate a slot"""
+    """Allocate a slot to a vehicle."""
     available_slots = [
         slot
         for slot, status in st.session_state["parking_slots"].items()
@@ -135,8 +127,7 @@ def allocate_slot(car_number, start, end, booking_type):
 
 
 def smart_allocate_slot(car_number, start, end, booking_type):
-    """Function to allocate a slot"""
-
+    """Smartly allocate a slot to a vehicle."""
     if car_number in st.session_state["vehicle_id"]:
         car_info = st.session_state["bookings"][car_number]
         if booking_type == "checkin":
@@ -146,7 +137,7 @@ def smart_allocate_slot(car_number, start, end, booking_type):
                     f'Your slot is {st.session_state["bookings"][car_number]["slot"]}'
                 , icon="✅")
                 return
-            st.toast("Time se aa bsdk", icon="❌")
+            st.toast("Please come on time", icon="❌")
             return
         if booking_type == "booking":
             st.toast("Already allocated a slot for the vehicle", icon="❌")
@@ -195,12 +186,11 @@ def smart_allocate_slot(car_number, start, end, booking_type):
 
 
 def deallocate_slot(car_number):
-    """Function for deallocating a slot"""
+    """Deallocate a slot."""
     if car_number in st.session_state["bookings"]:
         allocated_slot = st.session_state["bookings"][car_number]["slot"]
         st.session_state["parking_slots"][allocated_slot] = "available"
         del st.session_state["bookings"][car_number]
-        # Re-render just this slot
         ts = st.session_state["time_slots"]
 
         for key in st.session_state["time_slots"].keys():
@@ -209,27 +199,11 @@ def deallocate_slot(car_number):
                     del st.session_state["time_slots"][key][i]
                     break
 
-        # for i, slot in enumerate(st.session_state["time_slots"]):
-        #     if slot[0]==car_number:
-        #         del st.session_state["time_slots"][i]
         render_slot(allocated_slot)
         st.session_state["vehicle_id"].remove(car_number)
         return allocated_slot
 
     return None
-
-
-# def check_expired_bookings():
-#     """
-#     If a booking has exceeded its duration, deallocate that slot.
-#     """
-#     current_time = time.time()
-#     expired_cars = []
-#     for car_number, booking in st.session_state["bookings"].items():
-#         if current_time >= booking["end_time"]:
-#             expired_cars.append(car_number)
-#     for car_number in expired_cars:
-#         deallocate_slot(car_number)
 
 
 def main():
@@ -245,9 +219,6 @@ def main():
         )
 
     st.markdown(f"### Current Selection: {choice}")
-
-    # Check for expired bookings before rendering slots
-    # check_expired_bookings()
 
     # Render the 10x10 grid of slots
     st.subheader("Parking Slots Layout")
@@ -266,14 +237,44 @@ def handle_check_in():
     """Handle the 'Check In' action."""
     st.subheader("Check In")
     car_number = st.text_input("Vehicle Number")
-    duration = st.number_input("Number of Hours", min_value=1, max_value=24, value=6)
+    is_prebooking = st.checkbox("Is this a pre-booking?")
+    
+    if is_prebooking:
+        if car_number in st.session_state["bookings"]:
+            booking_info = st.session_state["bookings"][car_number]
+            if booking_info["Booking_type"] == "booking":
+                duration_hour = int((booking_info["end_time"] - booking_info["start_time"]) // 3600)
+                duration_min = int(((booking_info["end_time"] - booking_info["start_time"])%3600) // 60)
+                st.write(f"Pre-booked duration: {duration_hour} hours {duration_min} minutes")
+            else:
+                st.toast("This vehicle does not have a pre-booking.", icon="❌")
+                return
+        else:
+            st.toast("No pre-booking found for this vehicle.", icon="❌")
+            return
+    else:
+        duration = st.number_input("Number of Hours", min_value=1, max_value=24, value=6)
+    
     curr = time.time()
+    
     if st.button("Check In"):
         if not car_number.strip():
             st.toast("Please enter a valid car number.", icon="❌")
             return
 
-        smart_allocate_slot(car_number, curr, curr + duration * 3600, "checkin")
+        if is_prebooking:
+            if car_number in st.session_state["bookings"]:
+                booking_info = st.session_state["bookings"][car_number]
+                if booking_info["Booking_type"] == "booking":
+                    start_time = booking_info["start_time"]
+                    end_time = booking_info["end_time"]
+                    smart_allocate_slot(car_number, start_time, end_time, "checkin")
+                else:
+                    st.toast("This vehicle does not have a pre-booking.", icon="❌")
+            else:
+                st.toast("No pre-booking found for this vehicle.", icon="❌")
+        else:
+            smart_allocate_slot(car_number, curr, curr + duration * 3600, "checkin")
 
 
 def handle_pre_booking():

@@ -327,7 +327,7 @@ def handle_pre_booking():
 
 def handle_check_out():
     """Handle the 'Check Out' action."""
-    st.subheader("Check Out")
+    st.subheader("Check Out/Cancel Booking")
     car_number = st.text_input("Vehicle Number")
 
     if st.button("Check Out"):

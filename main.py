@@ -194,6 +194,7 @@ def smart_allocate_slot(car_number, start, end, booking_type):
     st.session_state["vehicle_id"].add(car_number)
     st.session_state["parking_slots"][ind] = "booked"
     st.toast(f"Slot {ind} pre-booked for {car_number}", icon="✅")
+    render_all_slots()
 
 
 def deallocate_slot(car_number):

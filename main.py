@@ -1,8 +1,9 @@
+"""Module to create a smart parking system"""
 import bisect
 import datetime
 import random
 import time
-import threading
+
 import streamlit as st
 
 # Initialize session state variables
@@ -82,10 +83,13 @@ def render_slot(slot_id):
     """Render a slot with its current status."""
     slot_booking = st.session_state["time_slots"][slot_id]
     curr_time = time.time()
-    overlap_bool, diff1, diff2 = is_overlapping((curr_time, curr_time), slot_booking)
-    if (len(slot_booking) == 0): color = "lightblue"
-    elif (overlap_bool): color = "red"
-    else: color = "darkgrey"
+    overlap_bool, _, _ = is_overlapping((curr_time, curr_time), slot_booking)
+    if len(slot_booking) == 0:
+        color = "lightblue"
+    elif overlap_bool:
+        color = "red"
+    else:
+        color = "darkgrey"
 
     st.session_state["slot_placeholders"][slot_id].markdown(
         f"<div style='background-color:{color}; "
@@ -126,11 +130,12 @@ def allocate_slot(car_number, start, end, booking_type):
 
         render_slot(allocated_slot)
         st.session_state["vehicle_id"].add(car_number)
-        st.toast(f"Slot {str(allocated_slot)} pre-booked for {car_number}", icon="✅")
+        a="pre-booked" if booking_type=="booking" else "allocated"
+        st.toast(f"Slot {str(allocated_slot)} {a} for {car_number}", icon="✅")
         return
     st.toast("No slots available", icon="❌")
 
-
+# pylint: disable=too-many-branches
 def smart_allocate_slot(car_number, start, end, booking_type):
     """Smartly allocate a slot to a vehicle."""
     if car_number in st.session_state["vehicle_id"]:
@@ -139,8 +144,9 @@ def smart_allocate_slot(car_number, start, end, booking_type):
             curr = time.time()
             if car_info["start_time"] <= curr < car_info["end_time"]:
                 st.toast(
-                    f'Your slot is {st.session_state["bookings"][car_number]["slot"]}'
-                , icon="✅")
+                    f'Your slot is {st.session_state["bookings"][car_number]["slot"]}',
+                    icon="✅",
+                )
                 return
             st.toast("Please come on time", icon="❌")
             return
@@ -237,20 +243,27 @@ def main():
     elif choice == "Check Out":
         handle_check_out()
 
-
+# pylint: disable=too-many-branches
 def handle_check_in():
     """Handle the 'Check In' action."""
     st.subheader("Check In")
     car_number = st.text_input("Vehicle Number")
     is_prebooking = st.checkbox("Is this a pre-booking?")
-    
+
     if is_prebooking:
         if car_number in st.session_state["bookings"]:
             booking_info = st.session_state["bookings"][car_number]
             if booking_info["Booking_type"] == "booking":
-                duration_hour = int((booking_info["end_time"] - booking_info["start_time"]) // 3600)
-                duration_min = int(((booking_info["end_time"] - booking_info["start_time"])%3600) // 60)
-                st.write(f"Pre-booked duration: {duration_hour} hours {duration_min} minutes")
+                duration_hour = int(
+                    (booking_info["end_time"] - booking_info["start_time"]) // 3600
+                )
+                duration_min = int(
+                    ((booking_info["end_time"] - booking_info["start_time"]) % 3600)
+                    // 60
+                )
+                st.write(
+                    f"Pre-booked duration: {duration_hour} hours {duration_min} minutes"
+                )
             else:
                 st.toast("This vehicle does not have a pre-booking.", icon="❌")
                 return
@@ -258,10 +271,12 @@ def handle_check_in():
             st.toast("No pre-booking found for this vehicle.", icon="❌")
             return
     else:
-        duration = st.number_input("Number of Hours", min_value=1, max_value=24, value=6)
-    
+        duration = st.number_input(
+            "Number of Hours", min_value=1, max_value=24, value=6
+        )
+
     curr = time.time()
-    
+
     if st.button("Check In"):
         if not car_number.strip():
             st.toast("Please enter a valid car number.", icon="❌")
@@ -321,7 +336,9 @@ def handle_check_out():
             return
         deallocated_slot = deallocate_slot(car_number)
         if deallocated_slot:
-            st.toast(f"Slot {deallocated_slot} deallocated for {car_number}.", icon="✅")
+            st.toast(
+                f"Slot {deallocated_slot} deallocated for {car_number}.", icon="✅"
+            )
         else:
             st.toast("Vehicle number not found in bookings.", icon="❌")
 
